@@ -1,0 +1,28 @@
+[package]
+name = "karateway-metrics"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+# Core
+karateway-core = { path = "../karateway-core" }
+
+# Async Runtime
+tokio = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Metrics
+prometheus = { workspace = true }
+
+# Error Handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Utilities
+dashmap = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
