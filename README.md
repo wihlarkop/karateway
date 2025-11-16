@@ -1,9 +1,9 @@
 # Karateway - Dynamic API Gateway
 
 > **Version:** 1.0.0
-> **Status:** Production Ready (Admin API + Dashboard) | Gateway In Development
+> **Status:** Production Ready
 
-A high-performance, dynamic API Gateway built with Cloudflare's Pingora framework, featuring zero-downtime configuration updates through database-driven configuration management.
+A high-performance, dynamic API Gateway built with Cloudflare's Pingora framework, featuring zero-downtime configuration updates, comprehensive security audit logging, and database-driven configuration management.
 
 ## Project Structure
 
@@ -129,12 +129,27 @@ pnpm dev
 
 The dashboard will be available at `http://localhost:5173`
 
-#### 6. (Future) Run Gateway
+#### 6. Run Gateway
 
 ```bash
-# Gateway is not yet implemented
-# Will be available in Phase 2
+# Development mode
+cargo run --bin gateway
+
+# Or with debug logging
+RUST_LOG=debug cargo run --bin gateway
+
+# Production mode (recommended)
 cargo run --bin gateway --release
+```
+
+The gateway will be available at:
+- **HTTP**: `http://localhost:8080`
+- **HTTPS**: `https://localhost:8443` (if TLS certificates are configured)
+
+To generate self-signed certificates for local development:
+```bash
+mkdir -p certs
+openssl req -x509 -newkey rsa:4096 -keyout certs/key.pem -out certs/cert.pem -days 365 -nodes -subj "/CN=localhost"
 ```
 
 ## Running the Project
@@ -148,7 +163,10 @@ docker-compose up
 # Terminal 2: Run Admin API with auto-reload
 cargo watch -x 'run --bin admin-api'
 
-# Terminal 3 (optional): Run dashboard
+# Terminal 3: Run Gateway
+RUST_LOG=debug cargo run --bin gateway
+
+# Terminal 4 (optional): Run dashboard
 cd dashboard && pnpm dev
 ```
 
@@ -158,11 +176,16 @@ cd dashboard && pnpm dev
 # Start databases in background
 docker-compose up -d
 
-# Build and run Admin API
+# Build release binaries
 cargo build --release
-./target/release/admin-api
 
-# Build and serve dashboard (when ready)
+# Run Admin API
+./target/release/admin-api &
+
+# Run Gateway
+./target/release/gateway &
+
+# Build and serve dashboard
 cd dashboard
 pnpm build
 pnpm preview
@@ -209,7 +232,8 @@ The database schema includes:
 - **whitelist_rules** - Authentication/authorization
 - **rate_limits** - Rate limiting configs
 - **load_balancer_config** - Load balancing
-- **config_audit_log** - Complete audit trail
+- **audit_logs** - Security event logging (rate limits, whitelist denials, etc.)
+- **config_audit_log** - Configuration change audit trail
 - **config_versions** - Point-in-time snapshots
 - **gateway_metrics** - Optional metrics storage
 
@@ -237,6 +261,47 @@ INSERT INTO api_routes (path_pattern, method, backend_service_id)
 VALUES ('/api/v1/users', 'GET', 'uuid-here');
 -- Gateway automatically reloads!
 ```
+
+## Security Audit Logging
+
+Karateway includes comprehensive security audit logging for all gateway events:
+
+### Features
+
+- **Non-blocking Logging**: Audit logs are written asynchronously using background workers
+- **Event Types**: Rate limit exceeded, whitelist denials, authentication failures, etc.
+- **Severity Levels**: Info, Warning, Critical
+- **Rich Context**: Request method, path, client IP, user agent, status codes
+- **API Access**: Query audit logs via Admin API with filtering and pagination
+- **Dashboard Viewer**: Real-time audit log viewing with auto-refresh in the admin dashboard
+
+### Event Categories
+
+- **Authentication**: Login attempts, token validation
+- **Rate Limit**: Rate limit violations and throttling events
+- **Whitelist**: Access control denials
+- **Admin**: Configuration changes and administrative actions
+
+### Viewing Audit Logs
+
+**Via Admin API:**
+```bash
+# Get recent audit logs
+curl http://localhost:8081/api/audit-logs?limit=50&offset=0
+
+# Filter by severity
+curl http://localhost:8081/api/audit-logs?severity=critical
+
+# Filter by event category
+curl http://localhost:8081/api/audit-logs?event_category=rate_limit
+```
+
+**Via Dashboard:**
+Navigate to `http://localhost:5173/audit-logs` to view logs with:
+- Pagination controls
+- Auto-refresh toggle (10-second intervals)
+- Color-coded severity badges
+- Full request context display
 
 ## Development
 
@@ -273,6 +338,28 @@ cargo fmt
 cargo clippy
 ```
 
+## Admin Dashboard Features
+
+The Svelte-based admin dashboard provides a modern UI for managing the gateway:
+
+### Available Pages
+
+- **Dashboard** (`/`) - Overview and statistics
+- **Services** (`/services`) - Manage backend services
+- **Routes** (`/routes`) - Configure API routes
+- **Rate Limits** (`/rate-limits`) - Set up rate limiting policies
+- **Whitelist** (`/whitelist`) - Manage access control rules
+- **Audit Logs** (`/audit-logs`) - View security events with real-time updates
+
+### Features
+
+- **Real-time Data**: Live updates from the Admin API
+- **Responsive Design**: Works on desktop and mobile
+- **Dark Mode Support**: Automatic theme detection
+- **Data Tables**: Sortable, searchable tables with pagination
+- **Form Validation**: Client-side validation for all forms
+- **Toast Notifications**: User-friendly success/error messages
+
 ## Documentation
 
 - **[API Documentation](docs/API.md)** - Complete API reference with examples
@@ -290,11 +377,18 @@ See **[docs/API.md](docs/API.md)** for complete API documentation with examples.
 - **API Routes**: Configure routing rules and path patterns
 - **Rate Limits**: Set up rate limiting policies
 - **Whitelist Rules**: Manage access control rules
+- **Audit Logs**: View security events and access logs with filtering
 - **Health Check**: `/health` endpoint for monitoring
+- **Service Health**: Real-time health status of backend services
 
-### Gateway (Port 8080)
+### Gateway (Port 8080 HTTP / 8443 HTTPS)
 
-- All configured routes are dynamically proxied (coming in Phase 2)
+- **Dynamic Routing**: All configured routes are dynamically proxied based on database configuration
+- **Rate Limiting**: Per-route and global rate limiting with Redis
+- **Whitelist Validation**: IP and API key-based access control
+- **Health Checking**: Automatic backend service health monitoring
+- **Audit Logging**: Non-blocking security event logging to database
+- **Zero-Downtime Reload**: Configuration updates without restarts
 
 ## Performance Targets
 
