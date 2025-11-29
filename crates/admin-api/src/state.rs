@@ -1,6 +1,7 @@
 use deadpool_redis::Pool as RedisPool;
 use karateway_config::repository::{
-    ApiRouteRepository, BackendServiceRepository, RateLimitRepository, WhitelistRuleRepository,
+    ApiRouteRepository, AuditLogRepository, BackendServiceRepository, RateLimitRepository,
+    WhitelistRuleRepository,
 };
 use sqlx::PgPool;
 
@@ -12,6 +13,7 @@ pub struct AppState {
     pub api_route_repo: ApiRouteRepository,
     pub whitelist_rule_repo: WhitelistRuleRepository,
     pub rate_limit_repo: RateLimitRepository,
+    pub audit_log_repo: AuditLogRepository,
 }
 
 impl AppState {
@@ -22,7 +24,8 @@ impl AppState {
             backend_service_repo: BackendServiceRepository::new(pool.clone()),
             api_route_repo: ApiRouteRepository::new(pool.clone()),
             whitelist_rule_repo: WhitelistRuleRepository::new(pool.clone()),
-            rate_limit_repo: RateLimitRepository::new(pool),
+            rate_limit_repo: RateLimitRepository::new(pool.clone()),
+            audit_log_repo: AuditLogRepository::new(pool),
         }
     }
 }

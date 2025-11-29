@@ -18,11 +18,6 @@ if ! command -v pnpm &> /dev/null; then
     exit 1
 fi
 
-if ! command -v sqlx &> /dev/null; then
-    echo "⚠️  sqlx-cli is not installed. Installing..."
-    cargo install sqlx-cli --no-default-features --features postgres
-fi
-
 # Setup environment
 echo "🔧 Setting up environment..."
 if [ ! -f .env ]; then
@@ -39,10 +34,14 @@ docker-compose up -d
 echo "⏳ Waiting for PostgreSQL to be ready..."
 sleep 5
 
+# Build migration binary
+echo "🔨 Building migration binary..."
+cargo build --bin migration --release
+
 # Run migrations
 echo "📊 Running database migrations..."
-sqlx database create || echo "Database already exists"
-sqlx migrate run
+DATABASE_URL=postgresql://karateway:karateway_dev_password@localhost:5433/karateway \
+  cargo run --bin migration up
 
 echo "✅ Database migrations completed"
 

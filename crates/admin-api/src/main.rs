@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
     info!("Database connection pool created");
 
     // Create Redis connection pool
-    let redis_cfg = RedisConfig::from_url(&config.redis_url);
+    let redis_cfg = RedisConfig::from_url(&config.redis_url());
     let redis_pool = redis_cfg
         .create_pool(Some(Runtime::Tokio1))
         .context("Failed to create Redis pool")?;

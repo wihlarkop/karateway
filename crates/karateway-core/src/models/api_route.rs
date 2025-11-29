@@ -114,3 +114,21 @@ pub struct UpdateApiRouteRequest {
 
     pub metadata: Option<serde_json::Value>,
 }
+
+/// Table identifier for api_routes table
+#[derive(sea_query::Iden)]
+pub enum ApiRoutes {
+    Table,
+    Id,
+    PathPattern,
+    Method,
+    BackendServiceId,
+    StripPathPrefix,
+    PreserveHostHeader,
+    TimeoutMs,
+    IsActive,
+    Priority,
+    Metadata,
+    CreatedAt,
+    UpdatedAt,
+}

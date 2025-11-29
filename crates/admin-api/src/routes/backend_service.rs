@@ -8,13 +8,13 @@ use karateway_core::{
     models::{ApiRoute, BackendService, CreateBackendServiceRequest, UpdateBackendServiceRequest},
     JsonResponse, MetaResponse,
 };
+use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 use validator::Validate;
 
 use crate::{error::ApiResult, routes::service_health, state::AppState};
-use redis::AsyncCommands;
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct BackendServiceWithRoutes {
@@ -224,18 +224,8 @@ async fn get_service_with_routes(
     // Get the service
     let service = state.backend_service_repo.find_by_id(id).await?;
 
-    // Get all routes for this service
-    let routes = sqlx::query_as::<_, ApiRoute>(
-        r#"
-        SELECT * FROM api_routes
-        WHERE backend_service_id = $1
-        ORDER BY priority DESC, created_at DESC
-        "#,
-    )
-    .bind(id)
-    .fetch_all(&state.db_pool)
-    .await
-    .map_err(karateway_core::KaratewayError::from)?;
+    // Get all routes for this service using the repository
+    let routes = state.api_route_repo.list_by_backend_service(id).await?;
 
     let response = BackendServiceWithRoutes { service, routes };
 

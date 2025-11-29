@@ -54,79 +54,18 @@ async fn list_audit_logs(
     let limit = query.limit.min(1000); // Max 1000 records at once
     let offset = query.offset;
 
-    // Build the base query
-    let mut sql = String::from(
-        r#"
-        SELECT
-            id, event_type, event_category, severity,
-            request_method, request_path, client_ip, user_agent,
-            api_route_id, backend_service_id, message, metadata,
-            status_code, created_at
-        FROM audit_logs
-        WHERE 1=1
-        "#,
-    );
+    // Use the repository to fetch audit logs
+    let logs = state
+        .audit_log_repo
+        .list(limit, offset)
+        .await
+        .map_err(|e| ApiError(e))?;
 
-    // Add filters if provided
-    if query.event_type.is_some() {
-        sql.push_str(" AND event_type = $1");
-    }
-    if query.event_category.is_some() {
-        sql.push_str(if query.event_type.is_some() {
-            " AND event_category = $2"
-        } else {
-            " AND event_category = $1"
-        });
-    }
-    if query.severity.is_some() {
-        let param_num = 1
-            + query.event_type.is_some() as i32
-            + query.event_category.is_some() as i32;
-        sql.push_str(&format!(" AND severity = ${}", param_num));
-    }
-    if query.client_ip.is_some() {
-        let param_num = 1
-            + query.event_type.is_some() as i32
-            + query.event_category.is_some() as i32
-            + query.severity.is_some() as i32;
-        sql.push_str(&format!(" AND client_ip = ${}", param_num));
-    }
-
-    sql.push_str(" ORDER BY created_at DESC");
-
-    // For simplicity, let's use the basic query without filters for now
-    // TODO: Implement proper parameterized queries with filters
-    let logs = sqlx::query_as::<_, AuditLog>(
-        r#"
-        SELECT
-            id, event_type, event_category, severity,
-            request_method, request_path, client_ip, user_agent,
-            api_route_id, backend_service_id, message, metadata,
-            status_code, created_at
-        FROM audit_logs
-        ORDER BY created_at DESC
-        LIMIT $1 OFFSET $2
-        "#,
-    )
-    .bind(limit)
-    .bind(offset)
-    .fetch_all(&state.db_pool)
-    .await
-    .map_err(|e| ApiError(e.into()))?;
-
-    let total: (i64,) = sqlx::query_as(
-        r#"
-        SELECT COUNT(*) as count
-        FROM audit_logs
-        "#,
-    )
-    .fetch_one(&state.db_pool)
-    .await
-    .map_err(|e| ApiError(e.into()))?;
+    let total = state.audit_log_repo.count().await.map_err(|e| ApiError(e))?;
 
     Ok(Json(JsonResponse::success(AuditLogResponse {
         logs,
-        total: total.0,
+        total,
         limit,
         offset,
     })))

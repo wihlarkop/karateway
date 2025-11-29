@@ -163,10 +163,7 @@ impl ProxyHttp for KaratewayProxy {
                     AuditEventType::WhitelistDenied,
                     AuditEventCategory::Whitelist,
                     AuditSeverity::Warning,
-                    format!(
-                        "Access denied by whitelist rules for {} {}",
-                        method, path
-                    ),
+                    format!("Access denied by whitelist rules for {} {}", method, path),
                 )
                 .request_method(method)
                 .request_path(path)

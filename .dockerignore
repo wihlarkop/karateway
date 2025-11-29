@@ -1,0 +1,75 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Build artifacts
+target/
+**/*.rs.bk
+**/*.pdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node
+node_modules/
+dashboard/node_modules/
+dashboard/.svelte-kit/
+dashboard/build/
+dashboard/dist/
+dashboard/.env
+dashboard/.env.*
+
+# Documentation
+*.md
+!README.md
+docs/
+RFC-*.md
+VERSION.md
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Test files
+tests/
+**/*_test.rs
+**/*.test.ts
+**/*.spec.ts
+
+# Development
+.env
+.env.*
+!.env.example
+*.log
+*.sqlite
+*.db
+
+# Certificates (should be mounted)
+certs/
+*.pem
+*.key
+*.crt
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+# Database
+# migrations/ - needed for admin-api container
+sqlx-data.json
+
+# Misc
+setup.sh

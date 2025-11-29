@@ -1,7 +1,9 @@
 use karateway_core::{
-    models::{BackendService, CreateBackendServiceRequest, UpdateBackendServiceRequest},
+    models::{BackendService, BackendServices, CreateBackendServiceRequest, UpdateBackendServiceRequest},
     KaratewayError, Result,
 };
+use sea_query::{Expr, Func, PostgresQueryBuilder, Query};
+use sea_query_binder::SqlxBinder;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -16,53 +18,83 @@ impl BackendServiceRepository {
     }
 
     pub async fn create(&self, req: CreateBackendServiceRequest) -> Result<BackendService> {
-        let service = sqlx::query_as::<_, BackendService>(
-            r#"
-            INSERT INTO backend_services (
-                name, description, base_url, health_check_url,
-                health_check_interval_seconds, timeout_ms
-            )
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING *
-            "#,
-        )
-        .bind(&req.name)
-        .bind(&req.description)
-        .bind(&req.base_url)
-        .bind(&req.health_check_url)
-        .bind(req.health_check_interval_seconds)
-        .bind(req.timeout_ms)
-        .fetch_one(&self.pool)
-        .await?;
+        let (sql, values) = Query::insert()
+            .into_table(BackendServices::Table)
+            .columns([
+                BackendServices::Name,
+                BackendServices::Description,
+                BackendServices::BaseUrl,
+                BackendServices::HealthCheckUrl,
+                BackendServices::HealthCheckIntervalSeconds,
+                BackendServices::TimeoutMs,
+            ])
+            .values_panic([
+                req.name.into(),
+                req.description.into(),
+                req.base_url.into(),
+                req.health_check_url.into(),
+                req.health_check_interval_seconds.into(),
+                req.timeout_ms.into(),
+            ])
+            .returning_all()
+            .build_sqlx(PostgresQueryBuilder);
+
+        let service = sqlx::query_as_with::<_, BackendService, _>(&sql, values)
+            .fetch_one(&self.pool)
+            .await?;
 
         Ok(service)
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> Result<BackendService> {
-        let service = sqlx::query_as::<_, BackendService>(
-            r#"
-            SELECT * FROM backend_services WHERE id = $1
-            "#,
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?
-        .ok_or_else(|| {
-            KaratewayError::NotFound(format!("Backend service with id {} not found", id))
-        })?;
+        let (sql, values) = Query::select()
+            .columns([
+                BackendServices::Id,
+                BackendServices::Name,
+                BackendServices::Description,
+                BackendServices::BaseUrl,
+                BackendServices::HealthCheckUrl,
+                BackendServices::HealthCheckIntervalSeconds,
+                BackendServices::TimeoutMs,
+                BackendServices::IsActive,
+                BackendServices::CreatedAt,
+                BackendServices::UpdatedAt,
+            ])
+            .from(BackendServices::Table)
+            .and_where(Expr::col(BackendServices::Id).eq(id))
+            .build_sqlx(PostgresQueryBuilder);
+
+        let service = sqlx::query_as_with::<_, BackendService, _>(&sql, values)
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or_else(|| {
+                KaratewayError::NotFound(format!("Backend service with id {} not found", id))
+            })?;
 
         Ok(service)
     }
 
     pub async fn find_by_name(&self, name: &str) -> Result<Option<BackendService>> {
-        let service = sqlx::query_as::<_, BackendService>(
-            r#"
-            SELECT * FROM backend_services WHERE name = $1
-            "#,
-        )
-        .bind(name)
-        .fetch_optional(&self.pool)
-        .await?;
+        let (sql, values) = Query::select()
+            .columns([
+                BackendServices::Id,
+                BackendServices::Name,
+                BackendServices::Description,
+                BackendServices::BaseUrl,
+                BackendServices::HealthCheckUrl,
+                BackendServices::HealthCheckIntervalSeconds,
+                BackendServices::TimeoutMs,
+                BackendServices::IsActive,
+                BackendServices::CreatedAt,
+                BackendServices::UpdatedAt,
+            ])
+            .from(BackendServices::Table)
+            .and_where(Expr::col(BackendServices::Name).eq(name))
+            .build_sqlx(PostgresQueryBuilder);
+
+        let service = sqlx::query_as_with::<_, BackendService, _>(&sql, values)
+            .fetch_optional(&self.pool)
+            .await?;
 
         Ok(service)
     }
@@ -70,29 +102,41 @@ impl BackendServiceRepository {
     pub async fn list(&self, page: u32, limit: u32) -> Result<Vec<BackendService>> {
         let offset = (page.saturating_sub(1)) * limit;
 
-        let services = sqlx::query_as::<_, BackendService>(
-            r#"
-            SELECT * FROM backend_services
-            ORDER BY created_at DESC
-            LIMIT $1 OFFSET $2
-            "#,
-        )
-        .bind(limit as i64)
-        .bind(offset as i64)
-        .fetch_all(&self.pool)
-        .await?;
+        let (sql, values) = Query::select()
+            .columns([
+                BackendServices::Id,
+                BackendServices::Name,
+                BackendServices::Description,
+                BackendServices::BaseUrl,
+                BackendServices::HealthCheckUrl,
+                BackendServices::HealthCheckIntervalSeconds,
+                BackendServices::TimeoutMs,
+                BackendServices::IsActive,
+                BackendServices::CreatedAt,
+                BackendServices::UpdatedAt,
+            ])
+            .from(BackendServices::Table)
+            .order_by(BackendServices::CreatedAt, sea_query::Order::Desc)
+            .limit(limit as u64)
+            .offset(offset as u64)
+            .build_sqlx(PostgresQueryBuilder);
+
+        let services = sqlx::query_as_with::<_, BackendService, _>(&sql, values)
+            .fetch_all(&self.pool)
+            .await?;
 
         Ok(services)
     }
 
     pub async fn count(&self) -> Result<u64> {
-        let count: (i64,) = sqlx::query_as(
-            r#"
-            SELECT COUNT(*) FROM backend_services
-            "#,
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let (sql, values) = Query::select()
+            .expr(Func::count(Expr::col(BackendServices::Id)))
+            .from(BackendServices::Table)
+            .build_sqlx(PostgresQueryBuilder);
+
+        let count: (i64,) = sqlx::query_as_with(&sql, values)
+            .fetch_one(&self.pool)
+            .await?;
 
         Ok(count.0 as u64)
     }
@@ -129,39 +173,37 @@ impl BackendServiceRepository {
         }
 
         // Save to database
-        let updated = sqlx::query_as::<_, BackendService>(
-            r#"
-            UPDATE backend_services
-            SET name = $1, description = $2, base_url = $3,
-                health_check_url = $4, health_check_interval_seconds = $5,
-                timeout_ms = $6, is_active = $7, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $8
-            RETURNING *
-            "#,
-        )
-        .bind(&service.name)
-        .bind(&service.description)
-        .bind(&service.base_url)
-        .bind(&service.health_check_url)
-        .bind(service.health_check_interval_seconds)
-        .bind(service.timeout_ms)
-        .bind(service.is_active)
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await?;
+        let (sql, values) = Query::update()
+            .table(BackendServices::Table)
+            .values([
+                (BackendServices::Name, service.name.clone().into()),
+                (BackendServices::Description, service.description.clone().into()),
+                (BackendServices::BaseUrl, service.base_url.clone().into()),
+                (BackendServices::HealthCheckUrl, service.health_check_url.clone().into()),
+                (BackendServices::HealthCheckIntervalSeconds, service.health_check_interval_seconds.into()),
+                (BackendServices::TimeoutMs, service.timeout_ms.into()),
+                (BackendServices::IsActive, service.is_active.into()),
+            ])
+            .and_where(Expr::col(BackendServices::Id).eq(id))
+            .returning_all()
+            .build_sqlx(PostgresQueryBuilder);
+
+        let updated = sqlx::query_as_with::<_, BackendService, _>(&sql, values)
+            .fetch_one(&self.pool)
+            .await?;
 
         Ok(updated)
     }
 
     pub async fn delete(&self, id: Uuid) -> Result<()> {
-        let result = sqlx::query(
-            r#"
-            DELETE FROM backend_services WHERE id = $1
-            "#,
-        )
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
+        let (sql, values) = Query::delete()
+            .from_table(BackendServices::Table)
+            .and_where(Expr::col(BackendServices::Id).eq(id))
+            .build_sqlx(PostgresQueryBuilder);
+
+        let result = sqlx::query_with(&sql, values)
+            .execute(&self.pool)
+            .await?;
 
         if result.rows_affected() == 0 {
             return Err(KaratewayError::NotFound(format!(
@@ -174,15 +216,27 @@ impl BackendServiceRepository {
     }
 
     pub async fn list_active(&self) -> Result<Vec<BackendService>> {
-        let services = sqlx::query_as::<_, BackendService>(
-            r#"
-            SELECT * FROM backend_services
-            WHERE is_active = true
-            ORDER BY created_at DESC
-            "#,
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let (sql, values) = Query::select()
+            .columns([
+                BackendServices::Id,
+                BackendServices::Name,
+                BackendServices::Description,
+                BackendServices::BaseUrl,
+                BackendServices::HealthCheckUrl,
+                BackendServices::HealthCheckIntervalSeconds,
+                BackendServices::TimeoutMs,
+                BackendServices::IsActive,
+                BackendServices::CreatedAt,
+                BackendServices::UpdatedAt,
+            ])
+            .from(BackendServices::Table)
+            .and_where(Expr::col(BackendServices::IsActive).eq(true))
+            .order_by(BackendServices::CreatedAt, sea_query::Order::Desc)
+            .build_sqlx(PostgresQueryBuilder);
+
+        let services = sqlx::query_as_with::<_, BackendService, _>(&sql, values)
+            .fetch_all(&self.pool)
+            .await?;
 
         Ok(services)
     }

@@ -1,7 +1,9 @@
 use karateway_core::{
-    models::{ApiRoute, CreateApiRouteRequest, UpdateApiRouteRequest},
+    models::{ApiRoute, ApiRoutes, CreateApiRouteRequest, UpdateApiRouteRequest},
     KaratewayError, Result,
 };
+use sea_query::{Expr, Func, PostgresQueryBuilder, Query};
+use sea_query_binder::SqlxBinder;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -16,40 +18,64 @@ impl ApiRouteRepository {
     }
 
     pub async fn create(&self, req: CreateApiRouteRequest) -> Result<ApiRoute> {
-        let route = sqlx::query_as::<_, ApiRoute>(
-            r#"
-            INSERT INTO api_routes (
-                path_pattern, method, backend_service_id, strip_path_prefix,
-                preserve_host_header, timeout_ms, priority, metadata
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING *
-            "#,
-        )
-        .bind(&req.path_pattern)
-        .bind(&req.method)
-        .bind(req.backend_service_id)
-        .bind(req.strip_path_prefix.unwrap_or(false))
-        .bind(req.preserve_host_header.unwrap_or(false))
-        .bind(req.timeout_ms)
-        .bind(req.priority.unwrap_or(0))
-        .bind(req.metadata.unwrap_or(serde_json::json!({})))
-        .fetch_one(&self.pool)
-        .await?;
+        let (sql, values) = Query::insert()
+            .into_table(ApiRoutes::Table)
+            .columns([
+                ApiRoutes::PathPattern,
+                ApiRoutes::Method,
+                ApiRoutes::BackendServiceId,
+                ApiRoutes::StripPathPrefix,
+                ApiRoutes::PreserveHostHeader,
+                ApiRoutes::TimeoutMs,
+                ApiRoutes::Priority,
+                ApiRoutes::Metadata,
+            ])
+            .values_panic([
+                req.path_pattern.into(),
+                req.method.to_string().into(),
+                req.backend_service_id.into(),
+                req.strip_path_prefix.unwrap_or(false).into(),
+                req.preserve_host_header.unwrap_or(false).into(),
+                req.timeout_ms.into(),
+                req.priority.unwrap_or(0).into(),
+                req.metadata.unwrap_or(serde_json::json!({})).into(),
+            ])
+            .returning_all()
+            .build_sqlx(PostgresQueryBuilder);
+
+        let route = sqlx::query_as_with::<_, ApiRoute, _>(&sql, values)
+            .fetch_one(&self.pool)
+            .await?;
 
         Ok(route)
     }
 
     pub async fn find_by_id(&self, id: Uuid) -> Result<ApiRoute> {
-        let route = sqlx::query_as::<_, ApiRoute>(
-            r#"
-            SELECT * FROM api_routes WHERE id = $1
-            "#,
-        )
-        .bind(id)
-        .fetch_optional(&self.pool)
-        .await?
-        .ok_or_else(|| KaratewayError::NotFound(format!("API route with id {} not found", id)))?;
+        let (sql, values) = Query::select()
+            .columns([
+                ApiRoutes::Id,
+                ApiRoutes::PathPattern,
+                ApiRoutes::Method,
+                ApiRoutes::BackendServiceId,
+                ApiRoutes::StripPathPrefix,
+                ApiRoutes::PreserveHostHeader,
+                ApiRoutes::TimeoutMs,
+                ApiRoutes::IsActive,
+                ApiRoutes::Priority,
+                ApiRoutes::Metadata,
+                ApiRoutes::CreatedAt,
+                ApiRoutes::UpdatedAt,
+            ])
+            .from(ApiRoutes::Table)
+            .and_where(Expr::col(ApiRoutes::Id).eq(id))
+            .build_sqlx(PostgresQueryBuilder);
+
+        let route = sqlx::query_as_with::<_, ApiRoute, _>(&sql, values)
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or_else(|| {
+                KaratewayError::NotFound(format!("API route with id {} not found", id))
+            })?;
 
         Ok(route)
     }
@@ -57,44 +83,73 @@ impl ApiRouteRepository {
     pub async fn list(&self, page: u32, limit: u32) -> Result<Vec<ApiRoute>> {
         let offset = (page.saturating_sub(1)) * limit;
 
-        let routes = sqlx::query_as::<_, ApiRoute>(
-            r#"
-            SELECT * FROM api_routes
-            ORDER BY priority DESC, created_at DESC
-            LIMIT $1 OFFSET $2
-            "#,
-        )
-        .bind(limit as i64)
-        .bind(offset as i64)
-        .fetch_all(&self.pool)
-        .await?;
+        let (sql, values) = Query::select()
+            .columns([
+                ApiRoutes::Id,
+                ApiRoutes::PathPattern,
+                ApiRoutes::Method,
+                ApiRoutes::BackendServiceId,
+                ApiRoutes::StripPathPrefix,
+                ApiRoutes::PreserveHostHeader,
+                ApiRoutes::TimeoutMs,
+                ApiRoutes::IsActive,
+                ApiRoutes::Priority,
+                ApiRoutes::Metadata,
+                ApiRoutes::CreatedAt,
+                ApiRoutes::UpdatedAt,
+            ])
+            .from(ApiRoutes::Table)
+            .order_by(ApiRoutes::Priority, sea_query::Order::Desc)
+            .order_by(ApiRoutes::CreatedAt, sea_query::Order::Desc)
+            .limit(limit as u64)
+            .offset(offset as u64)
+            .build_sqlx(PostgresQueryBuilder);
+
+        let routes = sqlx::query_as_with::<_, ApiRoute, _>(&sql, values)
+            .fetch_all(&self.pool)
+            .await?;
 
         Ok(routes)
     }
 
     pub async fn count(&self) -> Result<u64> {
-        let count: (i64,) = sqlx::query_as(
-            r#"
-            SELECT COUNT(*) FROM api_routes
-            "#,
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let (sql, values) = Query::select()
+            .expr(Func::count(Expr::col(ApiRoutes::Id)))
+            .from(ApiRoutes::Table)
+            .build_sqlx(PostgresQueryBuilder);
+
+        let count: (i64,) = sqlx::query_as_with(&sql, values)
+            .fetch_one(&self.pool)
+            .await?;
 
         Ok(count.0 as u64)
     }
 
     pub async fn list_by_backend_service(&self, backend_service_id: Uuid) -> Result<Vec<ApiRoute>> {
-        let routes = sqlx::query_as::<_, ApiRoute>(
-            r#"
-            SELECT * FROM api_routes
-            WHERE backend_service_id = $1
-            ORDER BY priority DESC, created_at DESC
-            "#,
-        )
-        .bind(backend_service_id)
-        .fetch_all(&self.pool)
-        .await?;
+        let (sql, values) = Query::select()
+            .columns([
+                ApiRoutes::Id,
+                ApiRoutes::PathPattern,
+                ApiRoutes::Method,
+                ApiRoutes::BackendServiceId,
+                ApiRoutes::StripPathPrefix,
+                ApiRoutes::PreserveHostHeader,
+                ApiRoutes::TimeoutMs,
+                ApiRoutes::IsActive,
+                ApiRoutes::Priority,
+                ApiRoutes::Metadata,
+                ApiRoutes::CreatedAt,
+                ApiRoutes::UpdatedAt,
+            ])
+            .from(ApiRoutes::Table)
+            .and_where(Expr::col(ApiRoutes::BackendServiceId).eq(backend_service_id))
+            .order_by(ApiRoutes::Priority, sea_query::Order::Desc)
+            .order_by(ApiRoutes::CreatedAt, sea_query::Order::Desc)
+            .build_sqlx(PostgresQueryBuilder);
+
+        let routes = sqlx::query_as_with::<_, ApiRoute, _>(&sql, values)
+            .fetch_all(&self.pool)
+            .await?;
 
         Ok(routes)
     }
@@ -132,41 +187,40 @@ impl ApiRouteRepository {
         }
 
         // Save to database
-        let updated = sqlx::query_as::<_, ApiRoute>(
-            r#"
-            UPDATE api_routes
-            SET path_pattern = $1, method = $2, backend_service_id = $3,
-                strip_path_prefix = $4, preserve_host_header = $5, timeout_ms = $6,
-                is_active = $7, priority = $8, metadata = $9, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $10
-            RETURNING *
-            "#,
-        )
-        .bind(&route.path_pattern)
-        .bind(&route.method)
-        .bind(route.backend_service_id)
-        .bind(route.strip_path_prefix)
-        .bind(route.preserve_host_header)
-        .bind(route.timeout_ms)
-        .bind(route.is_active)
-        .bind(route.priority)
-        .bind(&route.metadata)
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await?;
+        let (sql, values) = Query::update()
+            .table(ApiRoutes::Table)
+            .values([
+                (ApiRoutes::PathPattern, route.path_pattern.clone().into()),
+                (ApiRoutes::Method, route.method.to_string().into()),
+                (ApiRoutes::BackendServiceId, route.backend_service_id.into()),
+                (ApiRoutes::StripPathPrefix, route.strip_path_prefix.into()),
+                (
+                    ApiRoutes::PreserveHostHeader,
+                    route.preserve_host_header.into(),
+                ),
+                (ApiRoutes::TimeoutMs, route.timeout_ms.into()),
+                (ApiRoutes::IsActive, route.is_active.into()),
+                (ApiRoutes::Priority, route.priority.into()),
+                (ApiRoutes::Metadata, route.metadata.clone().into()),
+            ])
+            .and_where(Expr::col(ApiRoutes::Id).eq(id))
+            .returning_all()
+            .build_sqlx(PostgresQueryBuilder);
+
+        let updated = sqlx::query_as_with::<_, ApiRoute, _>(&sql, values)
+            .fetch_one(&self.pool)
+            .await?;
 
         Ok(updated)
     }
 
     pub async fn delete(&self, id: Uuid) -> Result<()> {
-        let result = sqlx::query(
-            r#"
-            DELETE FROM api_routes WHERE id = $1
-            "#,
-        )
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
+        let (sql, values) = Query::delete()
+            .from_table(ApiRoutes::Table)
+            .and_where(Expr::col(ApiRoutes::Id).eq(id))
+            .build_sqlx(PostgresQueryBuilder);
+
+        let result = sqlx::query_with(&sql, values).execute(&self.pool).await?;
 
         if result.rows_affected() == 0 {
             return Err(KaratewayError::NotFound(format!(
@@ -179,15 +233,30 @@ impl ApiRouteRepository {
     }
 
     pub async fn list_active(&self) -> Result<Vec<ApiRoute>> {
-        let routes = sqlx::query_as::<_, ApiRoute>(
-            r#"
-            SELECT * FROM api_routes
-            WHERE is_active = true
-            ORDER BY priority DESC, created_at DESC
-            "#,
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let (sql, values) = Query::select()
+            .columns([
+                ApiRoutes::Id,
+                ApiRoutes::PathPattern,
+                ApiRoutes::Method,
+                ApiRoutes::BackendServiceId,
+                ApiRoutes::StripPathPrefix,
+                ApiRoutes::PreserveHostHeader,
+                ApiRoutes::TimeoutMs,
+                ApiRoutes::IsActive,
+                ApiRoutes::Priority,
+                ApiRoutes::Metadata,
+                ApiRoutes::CreatedAt,
+                ApiRoutes::UpdatedAt,
+            ])
+            .from(ApiRoutes::Table)
+            .and_where(Expr::col(ApiRoutes::IsActive).eq(true))
+            .order_by(ApiRoutes::Priority, sea_query::Order::Desc)
+            .order_by(ApiRoutes::CreatedAt, sea_query::Order::Desc)
+            .build_sqlx(PostgresQueryBuilder);
+
+        let routes = sqlx::query_as_with::<_, ApiRoute, _>(&sql, values)
+            .fetch_all(&self.pool)
+            .await?;
 
         Ok(routes)
     }

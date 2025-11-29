@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use sea_query::Iden;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -65,4 +66,20 @@ impl BackendService {
     pub fn is_healthy(&self) -> bool {
         self.is_active
     }
+}
+
+/// Table identifier for backend_services table
+#[derive(Iden)]
+pub enum BackendServices {
+    Table,
+    Id,
+    Name,
+    Description,
+    BaseUrl,
+    HealthCheckUrl,
+    HealthCheckIntervalSeconds,
+    TimeoutMs,
+    IsActive,
+    CreatedAt,
+    UpdatedAt,
 }

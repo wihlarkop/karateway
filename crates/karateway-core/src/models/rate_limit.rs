@@ -82,3 +82,19 @@ pub struct UpdateRateLimitRequest {
     #[validate(range(min = 1, max = 1000000))]
     pub burst_size: Option<i32>,
 }
+
+/// Table identifier for rate_limits table
+#[derive(sea_query::Iden)]
+pub enum RateLimits {
+    Table,
+    Id,
+    Name,
+    ApiRouteId,
+    MaxRequests,
+    WindowSeconds,
+    IdentifierType,
+    IsActive,
+    BurstSize,
+    CreatedAt,
+    UpdatedAt,
+}

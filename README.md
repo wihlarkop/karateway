@@ -15,8 +15,8 @@ karateway/
 │   ├── karateway-core/    # Core domain models and types
 │   ├── config/            # Configuration management
 │   └── metrics/           # Metrics collection
+├── migration/             # Database migrations (sea-orm)
 ├── dashboard/             # Svelte admin dashboard
-├── migrations/            # Database migrations (sqlx)
 ├── docker-compose.yml     # PostgreSQL & Redis setup
 └── README.md
 ```
@@ -26,7 +26,8 @@ karateway/
 ### Backend
 - **Pingora** - High-performance proxy framework
 - **Axum** - Web framework for Admin API
-- **SQLx** - Type-safe SQL with compile-time checking
+- **SeaQuery + sqlx** - Type-safe SQL query builder with sqlx execution
+- **SeaORM Migration** - Database migration management
 - **PostgreSQL** - Configuration storage
 - **Redis** - Caching and rate limiting
 - **Tokio** - Async runtime
@@ -46,7 +47,6 @@ karateway/
 - Docker & Docker Compose
 - PostgreSQL 17+ (via Docker)
 - Redis 7+ (via Docker)
-- sqlx-cli (install: `cargo install sqlx-cli --no-default-features --features postgres`)
 
 ## Quick Start
 
@@ -59,8 +59,8 @@ chmod +x setup.sh
 ```
 
 This will:
-- ✅ Install sqlx-cli if not present
 - ✅ Start Docker containers (PostgreSQL + Redis)
+- ✅ Build migration binary
 - ✅ Run database migrations
 - ✅ Install frontend dependencies
 
@@ -89,12 +89,15 @@ docker-compose ps
 #### 3. Run Database Migrations
 
 ```bash
-# Install sqlx-cli (if not already installed)
-cargo install sqlx-cli --no-default-features --features postgres
+# Build the migration binary
+cargo build --bin migration --release
 
-# Create database and run migrations
-sqlx database create
-sqlx migrate run
+# Run migrations
+DATABASE_URL=postgresql://karateway:karateway_dev_password@localhost:5433/karateway \
+  cargo run --bin migration up
+
+# Or if DATABASE_URL is in .env
+cargo run --bin migration up
 ```
 
 #### 4. Run Admin API
@@ -191,6 +194,48 @@ pnpm build
 pnpm preview
 ```
 
+### Docker Production Deployment
+
+The easiest way to deploy Karateway in production:
+
+```bash
+# 1. Create environment file
+cat > .env.production <<EOF
+DB_PASSWORD=your_secure_db_password
+REDIS_PASSWORD=your_secure_redis_password
+VERSION=1.0.0
+RUST_LOG=info
+EOF
+
+# 2. Generate TLS certificates (or use Let's Encrypt)
+mkdir -p certs
+openssl req -x509 -newkey rsa:4096 \
+  -keyout certs/key.pem \
+  -out certs/cert.pem \
+  -days 365 -nodes \
+  -subj "/CN=gateway.example.com"
+
+# 3. Start all services
+docker-compose -f docker-compose.prod.yml --env-file .env.production up -d
+
+# 4. Check logs
+docker-compose -f docker-compose.prod.yml logs -f gateway
+
+# 5. Check health
+curl http://localhost:8080/health
+curl http://localhost:8081/health
+```
+
+**Services will be available at:**
+- Gateway: `http://localhost:8080` (HTTP) / `https://localhost:8443` (HTTPS)
+- Admin API: `http://localhost:8081`
+- Dashboard: `http://localhost:5173`
+
+**To stop:**
+```bash
+docker-compose -f docker-compose.prod.yml down
+```
+
 ### Testing the API
 
 Once the Admin API is running, you can:
@@ -237,7 +282,7 @@ The database schema includes:
 - **config_versions** - Point-in-time snapshots
 - **gateway_metrics** - Optional metrics storage
 
-See `migrations/` for complete schema details.
+See `migration/src/` for complete schema details.
 
 ## Configuration Management
 
@@ -308,9 +353,21 @@ Navigate to `http://localhost:5173/audit-logs` to view logs with:
 ### Adding a New Migration
 
 ```bash
-sqlx migrate add <migration_name>
-# Edit the generated file in migrations/
-sqlx migrate run
+# Create a new migration file in migration/src/
+# Name it: m{timestamp}_{description}.rs
+# Example: m20251123_create_new_table.rs
+
+# Implement the MigrationTrait
+# Then add it to migration/src/lib.rs
+
+# Run migrations
+cargo run --bin migration up
+
+# Rollback last migration
+cargo run --bin migration down
+
+# Check migration status
+cargo run --bin migration status
 ```
 
 ### Frontend Development
@@ -336,6 +393,73 @@ cargo fmt
 
 # Lint
 cargo clippy
+```
+
+## CI/CD Pipeline
+
+Karateway includes automated CI/CD workflows using GitHub Actions:
+
+### Automated Workflows
+
+**1. Tests (`test.yml`)** - Runs on every push and PR
+- ✅ Runs all tests with PostgreSQL and Redis
+- ✅ Code formatting checks (`cargo fmt`)
+- ✅ Linting with Clippy (`cargo clippy`)
+- ✅ Security audit (`cargo audit`)
+- ✅ Database migration tests
+
+**2. Docker Build (`docker.yml`)** - Builds and pushes images
+- 🐳 Multi-platform builds (linux/amd64, linux/arm64)
+- 🐳 Pushes to GitHub Container Registry (ghcr.io)
+- 🐳 Automatic tagging (latest, version tags, SHA)
+- 🔒 Security scanning with Trivy
+
+**3. Release (`release.yml`)** - Creates releases on version tags
+- 📦 Builds binaries for multiple platforms:
+  - Linux (x64, ARM64)
+  - Windows (x64)
+  - macOS (x64, ARM64)
+- 📝 Auto-generates changelog
+- 🚀 Creates GitHub releases with binaries
+
+### Using the CI/CD
+
+**Running tests locally:**
+```bash
+# Install dependencies
+docker-compose up -d postgres redis
+
+# Run tests
+cargo test
+
+# Run formatting check
+cargo fmt --check
+
+# Run clippy
+cargo clippy --all-targets --all-features
+```
+
+**Creating a release:**
+```bash
+# Tag a new version
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+
+# GitHub Actions will automatically:
+# 1. Run all tests
+# 2. Build Docker images
+# 3. Build binaries for all platforms
+# 4. Create a GitHub release
+```
+
+**Using Docker images:**
+```bash
+# Pull from GitHub Container Registry
+docker pull ghcr.io/your-username/karateway/gateway:latest
+docker pull ghcr.io/your-username/karateway/admin-api:latest
+
+# Or use specific version
+docker pull ghcr.io/your-username/karateway/gateway:v1.0.0
 ```
 
 ## Admin Dashboard Features

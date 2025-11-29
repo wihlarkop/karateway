@@ -1,0 +1,180 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+
+          # Generate changelog
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --reverse)
+          else
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --reverse)
+          fi
+
+          # Save to file
+          echo "$CHANGELOG" > CHANGELOG.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: CHANGELOG.txt
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-binaries:
+    name: Build Release Binaries
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name_gateway: gateway
+            artifact_name_admin_api: admin-api
+            asset_name_gateway: karateway-gateway-linux-amd64
+            asset_name_admin_api: karateway-admin-api-linux-amd64
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name_gateway: gateway
+            artifact_name_admin_api: admin-api
+            asset_name_gateway: karateway-gateway-linux-arm64
+            asset_name_admin_api: karateway-admin-api-linux-arm64
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name_gateway: gateway.exe
+            artifact_name_admin_api: admin-api.exe
+            asset_name_gateway: karateway-gateway-windows-amd64.exe
+            asset_name_admin_api: karateway-admin-api-windows-amd64.exe
+
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name_gateway: gateway
+            artifact_name_admin_api: admin-api
+            asset_name_gateway: karateway-gateway-macos-amd64
+            asset_name_admin_api: karateway-admin-api-macos-amd64
+
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name_gateway: gateway
+            artifact_name_admin_api: admin-api
+            asset_name_gateway: karateway-gateway-macos-arm64
+            asset_name_admin_api: karateway-admin-api-macos-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build gateway
+        run: cargo build --bin gateway --release --target ${{ matrix.target }}
+
+      - name: Build admin-api
+        run: cargo build --bin admin-api --release --target ${{ matrix.target }}
+
+      - name: Strip binaries (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          strip target/${{ matrix.target }}/release/${{ matrix.artifact_name_gateway }}
+          strip target/${{ matrix.target }}/release/${{ matrix.artifact_name_admin_api }}
+
+      - name: Compress binaries (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ${{ matrix.asset_name_gateway }}.tar.gz ${{ matrix.artifact_name_gateway }}
+          tar czf ${{ matrix.asset_name_admin_api }}.tar.gz ${{ matrix.artifact_name_admin_api }}
+
+      - name: Compress binaries (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ${{ matrix.asset_name_gateway }}.zip ${{ matrix.artifact_name_gateway }}
+          7z a ${{ matrix.asset_name_admin_api }}.zip ${{ matrix.artifact_name_admin_api }}
+
+      - name: Upload Gateway binary to release (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: target/${{ matrix.target }}/release/${{ matrix.asset_name_gateway }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Admin API binary to release (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: target/${{ matrix.target }}/release/${{ matrix.asset_name_admin_api }}.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Gateway binary to release (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: target/${{ matrix.target }}/release/${{ matrix.asset_name_gateway }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Admin API binary to release (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: target/${{ matrix.target }}/release/${{ matrix.asset_name_admin_api }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -42,7 +42,7 @@ fn main() -> Result<()> {
         // Initialize database connection pool
         let db_pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(10)
-            .connect(&app_config.database_url)
+            .connect(&app_config.database_url())
             .await?;
         info!("Connected to PostgreSQL database");
 
@@ -70,7 +70,7 @@ fn main() -> Result<()> {
     // Initialize rate limiter (optional - only if Redis is configured)
     let rate_limiter = rt.block_on(async {
         let app_config = karateway_config::AppConfig::from_env().ok()?;
-        match RateLimiter::new(&app_config.redis_url) {
+        match RateLimiter::new(&app_config.redis_url()) {
             Ok(limiter) => {
                 info!("Rate limiter initialized with Redis");
                 Some(Arc::new(limiter))

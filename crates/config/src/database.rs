@@ -19,7 +19,7 @@ impl DatabaseConfig {
             .min_connections(self.config.db_min_connections)
             .acquire_timeout(Duration::from_secs(self.config.db_connect_timeout_seconds))
             .idle_timeout(Duration::from_secs(self.config.db_idle_timeout_seconds))
-            .connect(&self.config.database_url)
+            .connect(&self.config.database_url())
             .await
     }
 }

@@ -71,3 +71,18 @@ pub struct UpdateWhitelistRuleRequest {
 
     pub priority: Option<i32>,
 }
+
+/// Table identifier for whitelist_rules table
+#[derive(sea_query::Iden)]
+pub enum WhitelistRules {
+    Table,
+    Id,
+    RuleName,
+    RuleType,
+    ApiRouteId,
+    Config,
+    IsActive,
+    Priority,
+    CreatedAt,
+    UpdatedAt,
+}

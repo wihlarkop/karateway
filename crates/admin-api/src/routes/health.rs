@@ -1,6 +1,8 @@
 use axum::{extract::State, Json};
 use karateway_core::JsonResponse;
 use redis::AsyncCommands;
+use sea_query::{Expr, PostgresQueryBuilder, Query};
+use sea_query_binder::SqlxBinder;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -36,7 +38,11 @@ pub struct HealthResponse {
 )]
 pub async fn health_check(State(state): State<AppState>) -> Json<JsonResponse<HealthResponse>> {
     // Check database connection
-    let database = match sqlx::query("SELECT 1 as health_check")
+    let (sql, values) = Query::select()
+        .expr(Expr::value(1))
+        .build_sqlx(PostgresQueryBuilder);
+
+    let database = match sqlx::query_with(&sql, values)
         .fetch_one(&state.db_pool)
         .await
     {

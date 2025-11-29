@@ -1,4 +1,6 @@
-use karateway_core::models::AuditLog;
+use karateway_core::models::{AuditLog, AuditLogs};
+use sea_query::{PostgresQueryBuilder, Query};
+use sea_query_binder::SqlxBinder;
 use sqlx::PgPool;
 use tokio::sync::mpsc;
 use tracing::{error, info};
@@ -46,34 +48,43 @@ async fn audit_log_worker(pool: PgPool, mut rx: mpsc::UnboundedReceiver<AuditLog
 
 /// Save an audit log entry to the database
 async fn save_audit_log(pool: &PgPool, log: &AuditLog) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        r#"
-        INSERT INTO audit_logs (
-            id, event_type, event_category, severity,
-            request_method, request_path, client_ip, user_agent,
-            api_route_id, backend_service_id, message, metadata, status_code,
-            created_at
-        ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
-        )
-        "#,
-        log.id,
-        log.event_type,
-        log.event_category,
-        log.severity,
-        log.request_method,
-        log.request_path,
-        log.client_ip,
-        log.user_agent,
-        log.api_route_id,
-        log.backend_service_id,
-        log.message,
-        log.metadata,
-        log.status_code,
-        log.created_at
-    )
-    .execute(pool)
-    .await?;
+    let (sql, values) = Query::insert()
+        .into_table(AuditLogs::Table)
+        .columns([
+            AuditLogs::Id,
+            AuditLogs::EventType,
+            AuditLogs::EventCategory,
+            AuditLogs::Severity,
+            AuditLogs::RequestMethod,
+            AuditLogs::RequestPath,
+            AuditLogs::ClientIp,
+            AuditLogs::UserAgent,
+            AuditLogs::ApiRouteId,
+            AuditLogs::BackendServiceId,
+            AuditLogs::Message,
+            AuditLogs::Metadata,
+            AuditLogs::StatusCode,
+            AuditLogs::CreatedAt,
+        ])
+        .values_panic([
+            log.id.into(),
+            log.event_type.clone().into(),
+            log.event_category.clone().into(),
+            log.severity.clone().into(),
+            log.request_method.clone().into(),
+            log.request_path.clone().into(),
+            log.client_ip.clone().into(),
+            log.user_agent.clone().into(),
+            log.api_route_id.into(),
+            log.backend_service_id.into(),
+            log.message.clone().into(),
+            log.metadata.clone().into(),
+            log.status_code.into(),
+            log.created_at.into(),
+        ])
+        .build_sqlx(PostgresQueryBuilder);
+
+    sqlx::query_with(&sql, values).execute(pool).await?;
 
     Ok(())
 }

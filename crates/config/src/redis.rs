@@ -13,7 +13,7 @@ impl RedisConfig {
     }
 
     pub fn create_pool(&self) -> Result<Pool, RedisError> {
-        let cfg = Config::from_url(&self.config.redis_url);
+        let cfg = Config::from_url(&self.config.redis_url());
         cfg.create_pool(Some(Runtime::Tokio1)).map_err(|e| {
             RedisError::from((
                 redis::ErrorKind::IoError,

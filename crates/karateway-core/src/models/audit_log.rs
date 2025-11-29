@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use sea_query::Iden;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -200,4 +201,38 @@ impl AuditLogBuilder {
             created_at: Utc::now(),
         }
     }
+}
+
+/// Table identifier for audit_logs table
+#[derive(Iden)]
+pub enum AuditLogs {
+    Table,
+    Id,
+    EventType,
+    EventCategory,
+    Severity,
+    RequestMethod,
+    RequestPath,
+    ClientIp,
+    UserAgent,
+    ApiRouteId,
+    BackendServiceId,
+    Message,
+    Metadata,
+    StatusCode,
+    CreatedAt,
+}
+
+/// Table identifier for config_audit_log table
+#[derive(Iden)]
+pub enum ConfigAuditLogs {
+    Table,
+    Id,
+    TableName,
+    RecordId,
+    Operation,
+    OldData,
+    NewData,
+    ChangedBy,
+    ChangedAt,
 }
