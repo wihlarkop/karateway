@@ -124,5 +124,5 @@ dist/
 # Database
 *.db
 *.sqlite
-
+certs
 # End of https://www.toptal.com/developers/gitignore/api/jetbrains+all,rust,rust-analyzer

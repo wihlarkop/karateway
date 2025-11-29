@@ -2,12 +2,23 @@
 # This file documents security advisories that we're aware of but cannot fix immediately
 
 [advisories]
+# RUSTSEC-2024-0437: protobuf uncontrolled recursion
+# Status: Cannot fix - transitive dependency from Pingora
+# Source: protobuf 2.28.0 <- prometheus 0.13.4 <- pingora-core 0.6.0
+# Mitigation: Cannot patch without forking Pingora framework
+# Risk: Low - protobuf is used internally by Pingora for metrics, not exposed to external input
+# Action: Waiting for Pingora to update to prometheus 0.14.0+ (which uses protobuf 3.x)
+
 # RUSTSEC-2023-0071: RSA timing sidechannel in rsa crate
 # Status: No fix available from upstream
 # Source: Transitive dependency from jsonwebtoken and sqlx-mysql
 # Mitigation: We use jsonwebtoken with rust_crypto feature which uses different crypto backend
 # Risk: Low - this is used for JWT verification in admin API, not for private key operations
+
+# Unmaintained dependencies from Pingora framework
+# These are outside our control and require Pingora to update
 ignore = [
+    "RUSTSEC-2024-0437",  # protobuf - from pingora (prometheus 0.13.4 dependency)
     "RUSTSEC-2023-0071",  # rsa - no fix available, low risk for our use case
     "RUSTSEC-2021-0145",  # atty - unsound, from pingora (clap dependency)
     "RUSTSEC-2024-0320",  # yaml-rust - from pingora (serde_yaml dependency)
