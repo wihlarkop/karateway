@@ -41,7 +41,7 @@ karateway/
 
 ## Prerequisites
 
-- Rust 1.75+ (with cargo)
+- Rust 1.83+ (with cargo)
 - Node.js 20+
 - pnpm 10+
 - Docker & Docker Compose

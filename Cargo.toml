@@ -98,3 +98,11 @@ utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 # Security
 argon2 = "0.5.3"
 jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"] }
+
+# Dependency patches to fix security vulnerabilities
+[patch.crates-io]
+# Fix RUSTSEC-2024-0437: protobuf uncontrolled recursion
+protobuf = "3.7.2"
+
+# Fix unmaintained warnings from pingora dependencies
+prometheus = "0.14.0"

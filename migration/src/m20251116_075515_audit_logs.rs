@@ -27,7 +27,7 @@ impl MigrationTrait for Migration {
                     .col(uuid_null(AuditLogs::ApiRouteId))
                     .col(uuid_null(AuditLogs::BackendServiceId))
                     .col(text(AuditLogs::Message).not_null())
-                    .col(json_binary(AuditLogs::Metadata).default("'{}'::jsonb"))
+                    .col(json_binary(AuditLogs::Metadata).default("{}"))
                     .col(integer_null(AuditLogs::StatusCode))
                     .col(
                         timestamp_with_time_zone(AuditLogs::CreatedAt)
