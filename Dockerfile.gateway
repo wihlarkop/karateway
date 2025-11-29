@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
 # Create app directory
 WORKDIR /app
 
-# Copy dependency manifests
+# Copy workspace manifests only
 COPY Cargo.toml Cargo.lock ./
 COPY crates/gateway/Cargo.toml ./crates/gateway/
 COPY crates/admin-api/Cargo.toml ./crates/admin-api/
@@ -25,33 +25,15 @@ COPY crates/karateway-core/Cargo.toml ./crates/karateway-core/
 COPY crates/metrics/Cargo.toml ./crates/metrics/
 COPY migration/Cargo.toml ./migration/
 
-# Create dummy source files to cache dependencies
-RUN mkdir -p crates/gateway/src && \
-    echo "fn main() {}" > crates/gateway/src/main.rs && \
-    mkdir -p crates/admin-api/src && \
-    echo "fn main() {}" > crates/admin-api/src/main.rs && \
-    mkdir -p crates/config/src && \
-    echo "pub fn dummy() {}" > crates/config/src/lib.rs && \
-    mkdir -p crates/karateway-core/src && \
-    echo "pub fn dummy() {}" > crates/karateway-core/src/lib.rs && \
-    mkdir -p crates/metrics/src && \
-    echo "pub fn dummy() {}" > crates/metrics/src/lib.rs && \
-    mkdir -p migration/src && \
-    echo "fn main() {}" > migration/src/main.rs
-
-# Build dependencies (this layer will be cached)
-RUN cargo build --bin gateway --release && \
-    rm -rf crates/*/src migration/src target/release/gateway target/release/deps/*gateway* target/release/.fingerprint/*gateway*
+# Fetch all dependencies (this layer will be cached and works for multi-arch)
+RUN cargo fetch
 
 # Copy actual source code
 COPY crates ./crates
 COPY migration ./migration
 
-# Touch source files to force rebuild
-RUN find crates -type f -name "*.rs" -exec touch {} +
-
-# Build the actual application
-RUN cargo build --bin gateway --release
+# Build only the gateway binary
+RUN cargo build --release --bin gateway
 
 # Stage 2: Runtime
 FROM debian:bookworm-slim
