@@ -31,11 +31,11 @@ RUN mkdir -p crates/gateway/src && \
     mkdir -p crates/admin-api/src && \
     echo "fn main() {}" > crates/admin-api/src/main.rs && \
     mkdir -p crates/config/src && \
-    echo "fn main() {}" > crates/config/src/lib.rs && \
+    echo "pub fn dummy() {}" > crates/config/src/lib.rs && \
     mkdir -p crates/karateway-core/src && \
-    echo "fn main() {}" > crates/karateway-core/src/lib.rs && \
+    echo "pub fn dummy() {}" > crates/karateway-core/src/lib.rs && \
     mkdir -p crates/metrics/src && \
-    echo "fn main() {}" > crates/metrics/src/lib.rs && \
+    echo "pub fn dummy() {}" > crates/metrics/src/lib.rs && \
     mkdir -p migration/src && \
     echo "fn main() {}" > migration/src/main.rs
 

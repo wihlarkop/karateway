@@ -32,7 +32,7 @@ impl MigrationTrait for Migration {
                             ])),
                     )
                     .col(boolean(LoadBalancerConfig::HealthCheckEnabled).default(true))
-                    .col(json_binary(LoadBalancerConfig::Config).default("'{}'"))
+                    .col(json_binary(LoadBalancerConfig::Config).default("{}"))
                     .col(
                         timestamp_with_time_zone(LoadBalancerConfig::CreatedAt)
                             .extra("DEFAULT CURRENT_TIMESTAMP"),

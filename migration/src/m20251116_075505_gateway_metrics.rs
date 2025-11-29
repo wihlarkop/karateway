@@ -27,7 +27,7 @@ impl MigrationTrait for Migration {
                     .col(float_null(GatewayMetrics::ResponseTimeMs))
                     .col(uuid_null(GatewayMetrics::BackendServiceId))
                     .col(text_null(GatewayMetrics::ErrorMessage))
-                    .col(json_binary(GatewayMetrics::Metadata).default("'{}'"))
+                    .col(json_binary(GatewayMetrics::Metadata).default("{}"))
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk_gateway_metrics_route")

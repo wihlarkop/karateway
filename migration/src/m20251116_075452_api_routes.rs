@@ -30,7 +30,7 @@ impl MigrationTrait for Migration {
                     .col(integer(ApiRoutes::TimeoutMs).default(30000))
                     .col(boolean(ApiRoutes::IsActive).default(true))
                     .col(integer(ApiRoutes::Priority).default(0))
-                    .col(json_binary(ApiRoutes::Metadata).default("'{}'"))
+                    .col(json_binary(ApiRoutes::Metadata).default("{}"))
                     .col(
                         timestamp_with_time_zone(ApiRoutes::CreatedAt)
                             .extra("DEFAULT CURRENT_TIMESTAMP"),
